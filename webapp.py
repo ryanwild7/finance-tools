@@ -55,14 +55,14 @@ card_mtg_purchase = dbc.Card(
         dbc.CardHeader("Mortgage Purchase"),
         dbc.CardBody([
             html.P("Purchase Price", className="card-subtitle pt-2"),
-            dcc.Input(id='price', type='number', value=900000, min=1000,
+            dcc.Input(id='price', type='number', value=286000, min=1000,
                       max=5000000, size='10', step=1000, debounce=True),
             html.P("Deposit", className='card-subtitle pt-2'),
-            dcc.Input(id='deposit', type='number', value=140000, min=0,
+            dcc.Input(id='deposit', type='number', value=0, min=0,
                       max=5000000, step=1000, size='10', debounce=True),
             html.P("Interest Rate (annual %)", className='card-subtitle pt-2'),
             dcc.Input(id='ir_annual', type='number', min=0,
-                      max=10, step=0.05, value=1.55, size='10', debounce=True),
+                      max=10, step=0.05, value=5.94, size='10', debounce=True),
         ], style={'font-size': 14}),
     ], color="secondary", outline=True, className="mb-1"
 )
@@ -75,15 +75,17 @@ card_mtg_payments = dbc.Card(
              dcc.Dropdown(
                           id='dd_freq',
                           options=[
+                                {'label': 'Weekly', 'value': 'w'},
                               {'label': 'Monthly', 'value': 'm'},
                               {'label': 'Bi-Weekly', 'value': 'b'},
-                              {'label': 'Accelerated', 'value': 'a'}
+                              {'label': 'Accelerated', 'value': 'a'},
+
                               ],
                           value='m'
                           ),
              html.P("Payment", className='card-subtitle pt-2'),
              dcc.Input(id='payment', type='number', value=3000, min=500,
-                       max=10000, step=100, debounce=True),
+                       max=10000, step=1, debounce=True),
              ], style={'font-size': 14}
          )
     ], color='secondary', outline=True, className="mb-1"
@@ -112,6 +114,9 @@ card_rent = dbc.Card(
              html.P("Rent (monthly)", className='card-subtitle'),
              dcc.Input(id='rent', type='number', min=0, max=10000, step=100, 
                        value=2500, size='10', debounce=True),
+             html.P("Rent (weekly)", className='card-subtitle'),
+             dcc.Input(id='rent', type='number', min=0, max=10000, step=5,
+                                   value=2500, size='10', debounce=True),
              html.P("Maintainence Fees (monthly)", className='card-subtitle pt-2'),
              dcc.Input(id='main-fees', type='number', min=0, max=2000, step=50, 
                        value=650, size='10', debounce=True),
@@ -280,8 +285,8 @@ def plot_amortization(n_prepay, n_prepay_reset, n_scenario, n_scenario_reset,
         scenario_store = None
 
     # get the schedule
-    df, end_date = loan_calc.get_amortization(start_date, price, deposit,
-                                              payment, 25, ir, apr, freq,
+    df, end_date, min_payment = loan_calc.get_amortization(start_date, price, deposit,
+                                              payment, 30, ir, apr, freq,
                                               fee, prepay_store, scenario_store)
 
     # get/add scenarios
@@ -297,7 +302,7 @@ def plot_amortization(n_prepay, n_prepay_reset, n_scenario, n_scenario_reset,
     # update the markdown summary
     total_int = df.interest.sum()
     end_equity = df.equity.max()
-    diff = relativedelta(end_date, df.date.min())
+    diff = relativedelta(df[df['start']==0].date.min(), df.date.min())
     payback = f"{diff.years} Years, {diff.months} Months"
 
 
@@ -313,7 +318,8 @@ def plot_amortization(n_prepay, n_prepay_reset, n_scenario, n_scenario_reset,
 
     **Total Interest:**${total_int:,.0f}  
     **Ending Equity:** ${end_equity:,.0f}  
-    **Payback Period:** {payback}
+    **Payback Period:** {payback}\n
+    **Min Payment:** {min_payment}
     """
     # don't update the figure or md when saving scenarios
     if 'add-scenario' in changed_id:
@@ -358,6 +364,11 @@ def plot_rent_vs_buy(rent, fee, tax, inv_rate, price, deposit, payment,
         diff_payments = payment - rent
         taxes = tax/12
         main = fee
+    elif freq == 'w':
+        frequency = 'Weekly'
+        diff_payments = payment - rent
+        taxes = tax / 52
+        main = fee / 4
     else:
         frequency = 'Bi-Weekly'
         diff_payments = payment - rent
